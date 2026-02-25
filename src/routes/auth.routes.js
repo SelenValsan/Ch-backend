@@ -17,15 +17,15 @@ const isProduction = true; // IMPORTANT
 
 const accessCookieOptions = {
     httpOnly: true,
-    secure: isProduction,        // MUST be true on HTTPS
-    sameSite: "none",            // ⭐ THE REAL FIX
+    secure: true,            // REQUIRED for cross-site
+    sameSite: "none",        // REQUIRED for cross-site
     path: "/",
     maxAge: 15 * 60 * 1000,
 };
 
 const refreshCookieOptions = {
     httpOnly: true,
-    secure: isProduction,
+    secure: true,
     sameSite: "none",
     path: "/",
     maxAge: 7 * 24 * 60 * 60 * 1000,

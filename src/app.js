@@ -23,11 +23,15 @@ const allowedOrigins = [
 ];
 
 app.use(
-    cors({
-        origin: allowedOrigins,
-        credentials: true,
-    })
-);
+    app.use(
+        cors({
+            origin: [
+                "http://localhost:3000",
+                "https://your-vercel-project.vercel.app"
+            ],
+            credentials: true,
+        })
+    ));
 
 /* BODY PARSER */
 app.use(express.json());
