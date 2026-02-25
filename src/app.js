@@ -17,9 +17,14 @@ const app = express();
 /* ======================================================
    CORS CONFIG (CRITICAL FOR COOKIES)
    ====================================================== */
+const allowedOrigins = [
+    "http://localhost:3000",
+    "https://YOUR-VERCEL-DOMAIN.vercel.app"
+];
+
 app.use(
     cors({
-        origin: "http://localhost:3000",
+        origin: allowedOrigins,
         credentials: true,
     })
 );

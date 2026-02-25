@@ -18,10 +18,10 @@ const isProduction = process.env.NODE_ENV === "production";
 
 const accessCookieOptions = {
     httpOnly: true,
-    secure: isProduction, // HTTPS only in production
+    secure: isProduction,           // true on Render
     sameSite: isProduction ? "none" : "lax",
     path: "/",
-    maxAge: 15 * 60 * 1000, // 15 minutes
+    maxAge: 15 * 60 * 1000,
 };
 
 const refreshCookieOptions = {
@@ -29,9 +29,8 @@ const refreshCookieOptions = {
     secure: isProduction,
     sameSite: isProduction ? "none" : "lax",
     path: "/",
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    maxAge: 7 * 24 * 60 * 60 * 1000,
 };
-
 /* ============================================================
    LOGIN
    ============================================================ */
