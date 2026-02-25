@@ -10,24 +10,28 @@ const {
 } = require("../../utils/jwt");
 
 /* ============================================================
-   COOKIE OPTIONS (LOCALHOST SAFE)
+   ⭐ PRODUCTION-SAFE COOKIE SETTINGS
+   (Works on Localhost + Render + Vercel)
    ============================================================ */
+
+const isProduction = process.env.NODE_ENV === "production";
 
 const accessCookieOptions = {
     httpOnly: true,
-    secure: false,      // local only (Render later → true)
-    sameSite: "lax",    // ⭐ THE CORRECT VALUE
+    secure: isProduction, // HTTPS only in production
+    sameSite: isProduction ? "none" : "lax",
     path: "/",
-    maxAge: 15 * 60 * 1000,
+    maxAge: 15 * 60 * 1000, // 15 minutes
 };
 
 const refreshCookieOptions = {
     httpOnly: true,
-    secure: false,
-    sameSite: "lax",    // ⭐ IMPORTANT
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
     path: "/",
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
+
 /* ============================================================
    LOGIN
    ============================================================ */
@@ -35,7 +39,7 @@ router.post("/login", async (req, res) => {
     try {
         const { username, password } = req.body;
 
-        /* ---- CHECK USER ---- */
+        // 1️⃣ Check user
         const user = await prisma.user.findUnique({
             where: { username },
         });
@@ -44,32 +48,34 @@ router.post("/login", async (req, res) => {
             return res.status(401).json({ error: "Invalid username or password" });
         }
 
-        /* ---- VERIFY PASSWORD ---- */
+        // 2️⃣ Verify password
         const validPassword = await bcrypt.compare(password, user.passwordHash);
 
         if (!validPassword) {
             return res.status(401).json({ error: "Invalid username or password" });
         }
 
-        /* ---- GENERATE TOKENS ---- */
+        // 3️⃣ Generate tokens
         const accessToken = generateAccessToken(user);
         const refreshToken = generateRefreshToken(user);
 
-        /* ---- SAVE REFRESH TOKEN IN DB ---- */
+        // 4️⃣ Save refresh token in DB
         await prisma.user.update({
             where: { id: user.id },
             data: { refreshToken },
         });
 
-        /* ---- SET COOKIES ---- */
+        // 5️⃣ Set cookies
         res.cookie("accessToken", accessToken, accessCookieOptions);
         res.cookie("refreshToken", refreshToken, refreshCookieOptions);
 
         return res.json({
             message: "Login successful",
-            user: { id: user.id, username: user.username },
+            user: {
+                id: user.id,
+                username: user.username,
+            },
         });
-
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Login failed" });
@@ -87,13 +93,13 @@ router.post("/refresh", async (req, res) => {
             return res.status(401).json({ error: "No refresh token" });
         }
 
-        /* ---- VERIFY REFRESH TOKEN ---- */
+        // Verify refresh token
         const decoded = jwt.verify(
             refreshToken,
             process.env.REFRESH_TOKEN_SECRET
         );
 
-        /* ---- CHECK DATABASE ---- */
+        // Check DB
         const user = await prisma.user.findUnique({
             where: { id: decoded.id },
         });
@@ -102,18 +108,20 @@ router.post("/refresh", async (req, res) => {
             return res.status(403).json({ error: "Invalid refresh token" });
         }
 
-        /* ---- ISSUE NEW ACCESS TOKEN ---- */
+        // Issue new access token
         const newAccessToken = generateAccessToken(user);
 
         res.cookie("accessToken", newAccessToken, accessCookieOptions);
 
         return res.json({ message: "Session refreshed" });
-
     } catch (error) {
         return res.status(403).json({ error: "Refresh token expired" });
     }
 });
 
+/* ============================================================
+   LOGOUT
+   ============================================================ */
 router.post("/logout", async (req, res) => {
     try {
         const refreshToken = req.cookies.refreshToken;
@@ -125,8 +133,8 @@ router.post("/logout", async (req, res) => {
             });
         }
 
-        res.clearCookie("accessToken", accessCookieOptions);
-        res.clearCookie("refreshToken", refreshCookieOptions);
+        res.clearCookie("accessToken", { path: "/" });
+        res.clearCookie("refreshToken", { path: "/" });
 
         res.json({ message: "Logged out successfully" });
     } catch (error) {
