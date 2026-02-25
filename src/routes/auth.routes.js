@@ -10,16 +10,15 @@ const {
 } = require("../../utils/jwt");
 
 /* ============================================================
-   ⭐ PRODUCTION-SAFE COOKIE SETTINGS
-   (Works on Localhost + Render + Vercel)
+   PRODUCTION COOKIE OPTIONS (RENDER + VERCEL READY)
    ============================================================ */
 
-const isProduction = process.env.NODE_ENV === "production";
+const isProduction = true; // IMPORTANT
 
 const accessCookieOptions = {
     httpOnly: true,
-    secure: isProduction,           // true on Render
-    sameSite: isProduction ? "none" : "lax",
+    secure: isProduction,        // MUST be true on HTTPS
+    sameSite: "none",            // ⭐ THE REAL FIX
     path: "/",
     maxAge: 15 * 60 * 1000,
 };
@@ -27,7 +26,7 @@ const accessCookieOptions = {
 const refreshCookieOptions = {
     httpOnly: true,
     secure: isProduction,
-    sameSite: isProduction ? "none" : "lax",
+    sameSite: "none",
     path: "/",
     maxAge: 7 * 24 * 60 * 60 * 1000,
 };
