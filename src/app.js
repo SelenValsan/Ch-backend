@@ -19,7 +19,7 @@ const app = express();
    ====================================================== */
 const allowedOrigins = [
     "http://localhost:3000",
-    "https://YOUR-VERCEL-DOMAIN.vercel.app"
+    "https://ch-backend-giz7.onrender.com"
 ];
 
 app.use(
