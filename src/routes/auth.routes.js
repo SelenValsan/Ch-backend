@@ -10,26 +10,27 @@ const {
 } = require("../../utils/jwt");
 
 /* ============================================================
-   PRODUCTION COOKIE OPTIONS (RENDER + VERCEL READY)
+   COOKIE CONFIG — AUTO SWITCH LOCAL <-> PRODUCTION
    ============================================================ */
 
-const isProduction = true; // IMPORTANT
+const isProduction = process.env.NODE_ENV === "production";
 
 const accessCookieOptions = {
     httpOnly: true,
-    secure: true,            // REQUIRED for cross-site
-    sameSite: "none",        // REQUIRED for cross-site
+    secure: isProduction,                     // HTTPS only in prod
+    sameSite: isProduction ? "none" : "lax",  // cross-site only in prod
     path: "/",
-    maxAge: 15 * 60 * 1000,
+    maxAge: 15 * 60 * 1000, // 15 minutes
 };
 
 const refreshCookieOptions = {
     httpOnly: true,
-    secure: true,
-    sameSite: "none",
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
     path: "/",
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
+
 /* ============================================================
    LOGIN
    ============================================================ */
@@ -37,7 +38,6 @@ router.post("/login", async (req, res) => {
     try {
         const { username, password } = req.body;
 
-        // 1️⃣ Check user
         const user = await prisma.user.findUnique({
             where: { username },
         });
@@ -46,24 +46,22 @@ router.post("/login", async (req, res) => {
             return res.status(401).json({ error: "Invalid username or password" });
         }
 
-        // 2️⃣ Verify password
         const validPassword = await bcrypt.compare(password, user.passwordHash);
 
         if (!validPassword) {
             return res.status(401).json({ error: "Invalid username or password" });
         }
 
-        // 3️⃣ Generate tokens
         const accessToken = generateAccessToken(user);
         const refreshToken = generateRefreshToken(user);
 
-        // 4️⃣ Save refresh token in DB
+        // store refresh token in DB
         await prisma.user.update({
             where: { id: user.id },
             data: { refreshToken },
         });
 
-        // 5️⃣ Set cookies
+        // SET COOKIES
         res.cookie("accessToken", accessToken, accessCookieOptions);
         res.cookie("refreshToken", refreshToken, refreshCookieOptions);
 
@@ -74,6 +72,7 @@ router.post("/login", async (req, res) => {
                 username: user.username,
             },
         });
+
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Login failed" });
@@ -86,18 +85,13 @@ router.post("/login", async (req, res) => {
 router.post("/refresh", async (req, res) => {
     try {
         const refreshToken = req.cookies.refreshToken;
+        if (!refreshToken) return res.status(401).json({ error: "No refresh token" });
 
-        if (!refreshToken) {
-            return res.status(401).json({ error: "No refresh token" });
-        }
-
-        // Verify refresh token
         const decoded = jwt.verify(
             refreshToken,
             process.env.REFRESH_TOKEN_SECRET
         );
 
-        // Check DB
         const user = await prisma.user.findUnique({
             where: { id: decoded.id },
         });
@@ -106,12 +100,12 @@ router.post("/refresh", async (req, res) => {
             return res.status(403).json({ error: "Invalid refresh token" });
         }
 
-        // Issue new access token
         const newAccessToken = generateAccessToken(user);
 
         res.cookie("accessToken", newAccessToken, accessCookieOptions);
 
         return res.json({ message: "Session refreshed" });
+
     } catch (error) {
         return res.status(403).json({ error: "Refresh token expired" });
     }
@@ -131,10 +125,20 @@ router.post("/logout", async (req, res) => {
             });
         }
 
-        res.clearCookie("accessToken", { path: "/" });
-        res.clearCookie("refreshToken", { path: "/" });
+        res.clearCookie("accessToken", {
+            path: "/",
+            secure: isProduction,
+            sameSite: isProduction ? "none" : "lax",
+        });
+
+        res.clearCookie("refreshToken", {
+            path: "/",
+            secure: isProduction,
+            sameSite: isProduction ? "none" : "lax",
+        });
 
         res.json({ message: "Logged out successfully" });
+
     } catch (error) {
         res.status(500).json({ error: "Logout failed" });
     }
