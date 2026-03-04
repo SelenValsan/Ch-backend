@@ -3,11 +3,11 @@ const router = express.Router();
 const prisma = require("../config/prisma");
 
 /* ============================================================
-   CREATE SUPPLIER
+   CREATE SUPPLIER (WITH OLD BALANCE SUPPORT)
    ============================================================ */
 router.post("/", async (req, res) => {
     try {
-        const { name, phone, note } = req.body;
+        const { name, phone, note, oldBalance } = req.body;
 
         if (!name) {
             return res.status(400).json({ error: "Supplier name is required" });
@@ -18,6 +18,7 @@ router.post("/", async (req, res) => {
                 name,
                 phone,
                 note,
+                balance: oldBalance ? parseFloat(oldBalance) : 0,
             },
         });
 
@@ -95,7 +96,7 @@ router.get("/list", async (req, res) => {
 });
 
 /* ============================================================
-   SUPPLIER LEDGER (OPTIMIZED)
+   SUPPLIER LEDGER
    ============================================================ */
 router.get("/:id/ledger", async (req, res) => {
     try {
@@ -116,13 +117,11 @@ router.get("/:id/ledger", async (req, res) => {
             return res.status(404).json({ error: "Supplier not found" });
         }
 
-        // chronological order (correct accounting order)
         const transactions = await prisma.transaction.findMany({
             where: { supplierId },
             orderBy: { transactionDate: "asc" },
         });
 
-        // No recalculation anymore
         const ledger = transactions.map((tx) => ({
             id: tx.id,
             type: tx.type,
@@ -163,6 +162,35 @@ router.put("/:id", async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Failed to update supplier" });
+    }
+});
+
+/* ============================================================
+   DELETE SUPPLIER
+   ============================================================ */
+router.delete("/:id", async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+
+        await prisma.supplier.delete({
+            where: { id },
+        });
+
+        res.json({
+            message: "Supplier deleted successfully",
+        });
+
+    } catch (error) {
+        console.error(error);
+
+        // Foreign key constraint error (transactions exist)
+        if (error.code === "P2003") {
+            return res.status(400).json({
+                error: "Cannot delete supplier. Transactions exist for this supplier.",
+            });
+        }
+
+        res.status(500).json({ error: "Failed to delete supplier" });
     }
 });
 

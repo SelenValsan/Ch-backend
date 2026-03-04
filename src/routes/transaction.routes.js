@@ -1,7 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const prisma = require("../config/prisma"); // adjust if your prisma path is different
-
+const prisma = require("../config/prisma");
 
 /* ============================================================
    CREATE TRANSACTION + UPDATE SUPPLIER BALANCE (LEDGER SAFE)
@@ -22,14 +21,11 @@ router.post("/", async (req, res) => {
         const parsedSupplierId = parseInt(supplierId);
         const parsedAmount = parseFloat(amount);
 
-        // determine balance effect
         const balanceChange =
             type === "PURCHASE" ? parsedAmount : -parsedAmount;
 
-        /* ---------------- DB TRANSACTION ---------------- */
         const result = await prisma.$transaction(async (tx) => {
 
-            // 1️⃣ create transaction
             const transaction = await tx.transaction.create({
                 data: {
                     supplierId: parsedSupplierId,
@@ -45,7 +41,6 @@ router.post("/", async (req, res) => {
                 },
             });
 
-            // 2️⃣ update supplier running balance
             await tx.supplier.update({
                 where: { id: parsedSupplierId },
                 data: {
@@ -70,11 +65,61 @@ router.post("/", async (req, res) => {
 });
 
 /* ============================================================
+   DELETE TRANSACTION + FIX SUPPLIER BALANCE
+   ============================================================ */
+router.delete("/:id", async (req, res) => {
+    try {
+        const transactionId = parseInt(req.params.id);
+
+        const transaction = await prisma.transaction.findUnique({
+            where: { id: transactionId },
+        });
+
+        if (!transaction) {
+            return res.status(404).json({
+                error: "Transaction not found",
+            });
+        }
+
+        const balanceCorrection =
+            transaction.type === "PURCHASE"
+                ? -transaction.amount
+                : transaction.amount;
+
+        await prisma.$transaction(async (tx) => {
+
+            await tx.transaction.delete({
+                where: { id: transactionId },
+            });
+
+            await tx.supplier.update({
+                where: { id: transaction.supplierId },
+                data: {
+                    balance: {
+                        increment: balanceCorrection,
+                    },
+                },
+            });
+        });
+
+        res.json({
+            message: "Transaction deleted successfully",
+        });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            error: "Failed to delete transaction",
+        });
+    }
+});
+
+/* ============================================================
    GET TRANSACTIONS (FULL FILTER + PAGINATION)
    ============================================================ */
 router.get("/", async (req, res) => {
     try {
-        /* ---------- QUERY PARAMS ---------- */
+
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 20;
         const skip = (page - 1) * limit;
@@ -88,20 +133,16 @@ router.get("/", async (req, res) => {
             to,
         } = req.query;
 
-        /* ---------- WHERE CLAUSE ---------- */
         let where = {};
 
-        // TYPE FILTER
         if (type && type !== "ALL") {
             where.type = type;
         }
 
-        // SUPPLIER FILTER
         if (supplierId) {
             where.supplierId = parseInt(supplierId);
         }
 
-        // ITEM SEARCH
         if (search) {
             where.itemName = {
                 contains: search,
@@ -109,7 +150,6 @@ router.get("/", async (req, res) => {
             };
         }
 
-        // DATE RANGE
         if (from || to) {
             where.transactionDate = {};
 
@@ -124,9 +164,8 @@ router.get("/", async (req, res) => {
             }
         }
 
-        /* ---------- SORTING ---------- */
         let orderBy = {
-            transactionDate: "desc", // default latest first
+            transactionDate: "desc",
         };
 
         if (sort === "asc" || sort === "desc") {
@@ -135,10 +174,8 @@ router.get("/", async (req, res) => {
             };
         }
 
-        /* ---------- TOTAL COUNT ---------- */
         const total = await prisma.transaction.count({ where });
 
-        /* ---------- FETCH DATA ---------- */
         const transactions = await prisma.transaction.findMany({
             where,
             skip,
@@ -155,7 +192,6 @@ router.get("/", async (req, res) => {
             },
         });
 
-        /* ---------- RESPONSE ---------- */
         res.json({
             data: transactions,
             total,

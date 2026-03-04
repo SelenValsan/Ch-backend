@@ -4,28 +4,46 @@ const prisma = require("../config/prisma");
 const authenticate = require("../../middleware/authMiddleware");
 
 /* ============================================================
-   DASHBOARD (OPTIMIZED — NO TRANSACTION LOOPS)
+   DASHBOARD
    ============================================================ */
 router.get("/", authenticate, async (req, res) => {
-        try {
+    try {
 
-        /* ---------- COUNTS (FAST) ---------- */
-        const [supplierCount, transactionCount] = await Promise.all([
-            prisma.supplier.count(),
-            prisma.transaction.count(),
-        ]);
+        /* ---------- COUNTS ---------- */
+        const supplierCount = await prisma.supplier.count();
 
-        /* ---------- TOTAL BALANCE (SUPER FAST) ---------- */
+        /* ---------- TOTAL BALANCE ---------- */
         const balanceAgg = await prisma.supplier.aggregate({
             _sum: { balance: true },
         });
 
         const totalBalance = balanceAgg._sum.balance || 0;
 
+        /* ---------- TODAY PURCHASE TOTAL ---------- */
+
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+
+        const endOfToday = new Date();
+        endOfToday.setHours(23, 59, 59, 999);
+
+        const todayAgg = await prisma.transaction.aggregate({
+            _sum: { amount: true },
+            where: {
+                type: "PURCHASE",
+                transactionDate: {
+                    gte: startOfToday,
+                    lte: endOfToday,
+                },
+            },
+        });
+
+        const todayPurchaseTotal = todayAgg._sum.amount || 0;
+
         /* ---------- TOP SUPPLIERS YOU OWE ---------- */
         const topSuppliers = await prisma.supplier.findMany({
             where: {
-                balance: { gt: 0 }, // you owe them
+                balance: { gt: 0 },
             },
             orderBy: {
                 balance: "desc",
@@ -59,7 +77,7 @@ router.get("/", authenticate, async (req, res) => {
 
         res.json({
             supplierCount,
-            transactionCount,
+            todayPurchaseTotal,
             totalBalance,
             topSuppliers,
             latestTransactions,
