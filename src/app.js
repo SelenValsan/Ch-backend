@@ -25,7 +25,7 @@ app.set("trust proxy", 1);
 
 const allowedOrigins = [
     "http://localhost:3000",
-    "https://your-vercel-project.vercel.app",
+    "https://ch-vegetables.vercel.app",
 ];
 
 app.use(
