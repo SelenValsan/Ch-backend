@@ -3,7 +3,7 @@ const router = express.Router();
 const prisma = require("../config/prisma");
 
 /* ============================================================
-   CREATE TRANSACTION + UPDATE SUPPLIER BALANCE (LEDGER SAFE)
+   CREATE TRANSACTION(S)
    ============================================================ */
 router.post("/", async (req, res) => {
     try {
@@ -16,30 +16,77 @@ router.post("/", async (req, res) => {
             pricePerUnit,
             description,
             transactionDate,
+            items,
         } = req.body;
 
         const parsedSupplierId = parseInt(supplierId);
-        const parsedAmount = parseFloat(amount);
+
+        let transactionsToCreate = [];
+
+        /* =========================================
+           MULTIPLE ITEMS SUPPORT
+        ========================================= */
+
+        if (items && Array.isArray(items) && items.length > 0) {
+            transactionsToCreate = items.map((item) => ({
+                supplierId: parsedSupplierId,
+                type,
+                itemName: item.itemName,
+                quantity: item.quantity ? parseFloat(item.quantity) : null,
+                pricePerUnit: item.pricePerUnit
+                    ? parseFloat(item.pricePerUnit)
+                    : null,
+                amount:
+                    item.quantity && item.pricePerUnit
+                        ? parseFloat(item.quantity) * parseFloat(item.pricePerUnit)
+                        : parseFloat(item.amount || 0),
+                description: description || null,
+                transactionDate: transactionDate
+                    ? new Date(transactionDate)
+                    : new Date(),
+            }));
+        } else {
+            /* =========================================
+               SINGLE ITEM (CURRENT SYSTEM)
+            ========================================= */
+
+            transactionsToCreate.push({
+                supplierId: parsedSupplierId,
+                type,
+                itemName,
+                quantity: quantity ? parseFloat(quantity) : null,
+                pricePerUnit: pricePerUnit ? parseFloat(pricePerUnit) : null,
+                amount: parseFloat(amount),
+                description,
+                transactionDate: transactionDate
+                    ? new Date(transactionDate)
+                    : new Date(),
+            });
+        }
+
+        /* =========================================
+           CALCULATE BALANCE CHANGE
+        ========================================= */
+
+        const totalAmount = transactionsToCreate.reduce(
+            (sum, tx) => sum + tx.amount,
+            0
+        );
 
         const balanceChange =
-            type === "PURCHASE" ? parsedAmount : -parsedAmount;
+            type === "PURCHASE" ? totalAmount : -totalAmount;
+
+        /* =========================================
+           DB TRANSACTION
+        ========================================= */
 
         const result = await prisma.$transaction(async (tx) => {
+            const createdTransactions = [];
 
-            const transaction = await tx.transaction.create({
-                data: {
-                    supplierId: parsedSupplierId,
-                    type,
-                    amount: parsedAmount,
-                    itemName,
-                    quantity: quantity ? parseFloat(quantity) : null,
-                    pricePerUnit: pricePerUnit ? parseFloat(pricePerUnit) : null,
-                    description,
-                    transactionDate: transactionDate
-                        ? new Date(transactionDate)
-                        : new Date(),
-                },
-            });
+            for (const data of transactionsToCreate) {
+                const created = await tx.transaction.create({ data });
+                createdTransactions.push(created);
+            }
 
             await tx.supplier.update({
                 where: { id: parsedSupplierId },
@@ -50,12 +97,12 @@ router.post("/", async (req, res) => {
                 },
             });
 
-            return transaction;
+            return createdTransactions;
         });
 
         res.json({
-            message: "Transaction added successfully",
-            transaction: result,
+            message: "Transaction(s) added successfully",
+            transactions: result,
         });
 
     } catch (error) {
@@ -65,7 +112,7 @@ router.post("/", async (req, res) => {
 });
 
 /* ============================================================
-   DELETE TRANSACTION + FIX SUPPLIER BALANCE
+   DELETE TRANSACTION
    ============================================================ */
 router.delete("/:id", async (req, res) => {
     try {
@@ -87,7 +134,6 @@ router.delete("/:id", async (req, res) => {
                 : transaction.amount;
 
         await prisma.$transaction(async (tx) => {
-
             await tx.transaction.delete({
                 where: { id: transactionId },
             });
@@ -115,23 +161,15 @@ router.delete("/:id", async (req, res) => {
 });
 
 /* ============================================================
-   GET TRANSACTIONS (FULL FILTER + PAGINATION)
+   GET TRANSACTIONS
    ============================================================ */
 router.get("/", async (req, res) => {
     try {
-
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 20;
         const skip = (page - 1) * limit;
 
-        const {
-            type,
-            supplierId,
-            search,
-            sort,
-            from,
-            to,
-        } = req.query;
+        const { type, supplierId, search, sort, from, to } = req.query;
 
         let where = {};
 

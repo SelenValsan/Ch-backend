@@ -17,10 +17,11 @@ const app = express();
 /* ======================================================
    TRUST PROXY (REQUIRED FOR RENDER / HTTPS COOKIES)
    ====================================================== */
+
 app.set("trust proxy", 1);
 
 /* ======================================================
-   CORS CONFIG (CRITICAL FOR COOKIES)
+   CORS CONFIG
    ====================================================== */
 
 const allowedOrigins = [
@@ -41,37 +42,64 @@ app.use(
     })
 );
 
-/* BODY + COOKIE PARSER */
+/* ======================================================
+   BODY + COOKIE PARSER
+   ====================================================== */
+
 app.use(express.json());
 app.use(cookieParser());
 
-/* PUBLIC ROUTES */
-app.use("/auth", authRoutes);
+/* ======================================================
+   PUBLIC ROUTES
+   ====================================================== */
 
-/* 🔐 PROTECTED ROUTES */
-app.use(authenticate);
-app.use("/suppliers", supplierRoutes);
-app.use("/transactions", transactionRoutes);
-app.use("/dashboard", dashboardRoutes);
+/* Health check for uptime robot */
+app.get("/health", (req, res) => {
+    res.status(200).json({
+        status: "ok",
+        server: "running",
+        time: new Date(),
+    });
+});
 
-/* ROOT */
+/* Root route (public) */
 app.get("/", (req, res) => {
     res.send("Khata Backend Running 🚀");
 });
 
-/* DB TEST */
+/* Auth routes (login / refresh / logout) */
+app.use("/auth", authRoutes);
+
+/* ======================================================
+   🔐 PROTECTED ROUTES
+   ====================================================== */
+
+app.use(authenticate);
+
+app.use("/suppliers", supplierRoutes);
+app.use("/transactions", transactionRoutes);
+app.use("/dashboard", dashboardRoutes);
+
+/* ======================================================
+   DB TEST (PROTECTED)
+   ====================================================== */
+
 app.get("/test-db", async (req, res) => {
     try {
         const suppliers = await prisma.supplier.findMany();
-        res.json({ message: "Database connected successfully!", data: suppliers });
+
+        res.json({
+            message: "Database connected successfully!",
+            data: suppliers,
+        });
     } catch (error) {
         res.status(500).json({ error: "Database connection failed" });
     }
 });
 
-app.get("/health", (req, res) => {
-    res.status(200).json({ status: "ok" });
-});
+/* ======================================================
+   SERVER START
+   ====================================================== */
 
 const PORT = process.env.PORT || 5050;
 

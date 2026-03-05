@@ -33,7 +33,7 @@ router.post("/", async (req, res) => {
 });
 
 /* ============================================================
-   GET ALL SUPPLIERS (BASIC)
+   GET ALL SUPPLIERS
    ============================================================ */
 router.get("/", async (req, res) => {
     try {
@@ -49,7 +49,7 @@ router.get("/", async (req, res) => {
 });
 
 /* ============================================================
-   SUPPLIER SUMMARY (FAST — USES STORED BALANCE)
+   SUPPLIER SUMMARY
    ============================================================ */
 router.get("/summary", async (req, res) => {
     try {
@@ -74,7 +74,7 @@ router.get("/summary", async (req, res) => {
 });
 
 /* ============================================================
-   SUPPLIER LIST (FOR DROPDOWNS)
+   SUPPLIER LIST (FOR DROPDOWN)
    ============================================================ */
 router.get("/list", async (req, res) => {
     try {
@@ -120,28 +120,29 @@ router.get("/:id/ledger", async (req, res) => {
         const transactions = await prisma.transaction.findMany({
             where: { supplierId },
             orderBy: { transactionDate: "asc" },
+            select: {
+                id: true,
+                type: true,
+                itemName: true,
+                quantity: true,
+                pricePerUnit: true,
+                description: true,
+                amount: true,
+                transactionDate: true,
+            },
         });
-
-        const ledger = transactions.map((tx) => ({
-            id: tx.id,
-            type: tx.type,
-            itemName: tx.itemName,
-            quantity: tx.quantity,
-            pricePerUnit: tx.pricePerUnit,
-            description: tx.description,
-            amount: tx.amount,
-            date: tx.transactionDate,
-        }));
 
         res.json({
             supplier,
+            openingBalance: supplier.balance,
+            transactions,
             totalTransactions: transactions.length,
             currentBalance: supplier.balance,
-            ledger,
         });
+
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: "Failed to fetch ledger" });
+        res.status(500).json({ error: "Failed to fetch supplier ledger" });
     }
 });
 
@@ -183,7 +184,6 @@ router.delete("/:id", async (req, res) => {
     } catch (error) {
         console.error(error);
 
-        // Foreign key constraint error (transactions exist)
         if (error.code === "P2003") {
             return res.status(400).json({
                 error: "Cannot delete supplier. Transactions exist for this supplier.",
