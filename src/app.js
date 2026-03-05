@@ -69,6 +69,10 @@ app.get("/test-db", async (req, res) => {
     }
 });
 
+app.get("/health", (req, res) => {
+    res.status(200).json({ status: "ok" });
+});
+
 const PORT = process.env.PORT || 5050;
 
 app.listen(PORT, () => {
