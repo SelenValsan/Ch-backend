@@ -13,8 +13,6 @@ const {
    COOKIE CONFIG — AUTO SWITCH LOCAL <-> PRODUCTION
    ============================================================ */
 
-const isProduction = process.env.NODE_ENV === "production";
-
 const accessCookieOptions = {
     httpOnly: true,
     secure: true,
@@ -28,7 +26,7 @@ const refreshCookieOptions = {
     secure: true,
     sameSite: "none",
     path: "/",
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    maxAge: 7 * 24 * 60 * 60 * 1000,
 };
 
 /* ============================================================
