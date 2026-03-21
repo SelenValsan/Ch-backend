@@ -10,23 +10,23 @@ const {
 } = require("../../utils/jwt");
 
 /* ============================================================
-   COOKIE CONFIG — AUTO SWITCH LOCAL <-> PRODUCTION
+   COOKIE CONFIG — FIXED
    ============================================================ */
+console.log("NODE_ENV:", process.env.NODE_ENV);
+const isProduction = process.env.NODE_ENV === "production";
 
 const accessCookieOptions = {
     httpOnly: true,
-    secure: true,
-    sameSite: "none",
-    domain: ".onrender.com",
+    secure: isProduction, // true in prod, false in local
+    sameSite: isProduction ? "none" : "lax",
     path: "/",
     maxAge: 15 * 60 * 1000,
 };
 
 const refreshCookieOptions = {
     httpOnly: true,
-    secure: true,
-    sameSite: "none",
-    domain: ".onrender.com",
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
     path: "/",
     maxAge: 7 * 24 * 60 * 60 * 1000,
 };
@@ -67,6 +67,8 @@ router.post("/login", async (req, res) => {
 
         return res.json({
             message: "Login successful",
+            accessToken,
+            refreshToken,
             user: {
                 id: user.id,
                 username: user.username,
@@ -124,6 +126,8 @@ router.post("/logout", async (req, res) => {
                 data: { refreshToken: null },
             });
         }
+
+        const isProduction = process.env.NODE_ENV === "production";
 
         res.clearCookie("accessToken", {
             path: "/",

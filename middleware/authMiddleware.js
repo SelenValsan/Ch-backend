@@ -5,7 +5,23 @@ const isProduction = process.env.NODE_ENV === "production";
 
 async function authenticate(req, res, next) {
     try {
-        const accessToken = req.cookies.accessToken;
+        let accessToken = null;
+
+        /* ============================================================
+           1. CHECK AUTH HEADER (PRIMARY - NEW)
+           ============================================================ */
+        const authHeader = req.headers.authorization;
+
+        if (authHeader && authHeader.startsWith("Bearer ")) {
+            accessToken = authHeader.split(" ")[1];
+        }
+
+        /* ============================================================
+           2. FALLBACK TO COOKIE
+           ============================================================ */
+        if (!accessToken) {
+            accessToken = req.cookies.accessToken;
+        }
 
         /* ================= ACCESS TOKEN ================= */
         if (accessToken) {
@@ -19,22 +35,26 @@ async function authenticate(req, res, next) {
                 return next();
 
             } catch (err) {
-                // expired -> continue to refresh flow
+                // expired → continue to refresh flow
             }
         }
 
-        /* ================= REFRESH TOKEN ================= */
+        /* ============================================================
+           3. REFRESH TOKEN (COOKIE ONLY)
+           ============================================================ */
         const refreshToken = req.cookies.refreshToken;
+
         if (!refreshToken) {
             return res.status(401).json({ error: "Unauthorized - Login required" });
         }
 
         let decoded;
         try {
-            decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
-        }
-
-        catch {
+            decoded = jwt.verify(
+                refreshToken,
+                process.env.REFRESH_TOKEN_SECRET
+            );
+        } catch {
             return res.status(401).json({ error: "Session expired - Login again" });
         }
 
@@ -46,13 +66,16 @@ async function authenticate(req, res, next) {
             return res.status(401).json({ error: "Invalid session" });
         }
 
-        /* ISSUE NEW ACCESS TOKEN */
+        /* ============================================================
+           4. ISSUE NEW ACCESS TOKEN
+           ============================================================ */
         const newAccessToken = jwt.sign(
             { id: user.id, username: user.username },
             process.env.ACCESS_TOKEN_SECRET,
             { expiresIn: "15m" }
         );
 
+        // ✅ Set cookie (for fallback support)
         res.cookie("accessToken", newAccessToken, {
             httpOnly: true,
             secure: isProduction,
@@ -61,7 +84,9 @@ async function authenticate(req, res, next) {
             maxAge: 15 * 60 * 1000,
         });
 
+        // ✅ ALSO attach to request (IMPORTANT for current call)
         req.user = { id: user.id, username: user.username };
+
         next();
 
     } catch (error) {
