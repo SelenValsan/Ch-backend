@@ -56,10 +56,9 @@ app.use(cookieParser());
 /* Health check for uptime robot */
 app.get("/health", (req, res) => {
     res.status(200).json({
-        status: "ok",
+        status: "ok1",
         server: "running",
         time: new Date(),
-        update: latest,
     });
 });
 
