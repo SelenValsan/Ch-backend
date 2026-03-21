@@ -59,6 +59,7 @@ app.get("/health", (req, res) => {
         status: "ok",
         server: "running",
         time: new Date(),
+        update: latest,
     });
 });
 
